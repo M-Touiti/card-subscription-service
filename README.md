@@ -33,6 +33,51 @@ The project is a **Maven multi-module** application. Each module has a single, w
                   └─────────────────┘
 ```
 
+### Ports & Adapters
+
+```mermaid
+graph LR
+    %% ── Primary Adapters (Driving) ──────────────────────────────────────────
+    subgraph EXP["exposition  ·  entry point"]
+        CTRL["CardSubscriptionController\nPOST /api/v1/card-subscriptions\nGET  /{id}  ·  GET  /card/{cardId}"]
+    end
+    subgraph KC["kafka-consumer  ·  primary adapter"]
+        KL["CardEventKafkaConsumer\ncard.events  ·  DLT  ·  exp-backoff ×3"]
+    end
+
+    %% ── Application Core ────────────────────────────────────────────────────
+    subgraph APP["application"]
+        direction TB
+        IUC["« inbound ports »\nSubscribeCardUseCase\nGetCardSubscriptionUseCase"]
+        SVC["CardSubscriptionService\nimplements both inbound ports\nidempotency · PENDING → SUBSCRIBED | FAILED"]
+        OUC["« outbound ports »\nSaveCardSubscriptionPort  ·  LoadCardSubscriptionPort\nCardApiPort"]
+        IUC --> SVC
+        SVC --> OUC
+    end
+
+    %% ── Domain (innermost) ──────────────────────────────────────────────────
+    subgraph DOM["domain  ·  zero dependencies"]
+        DM["CardSubscription  (aggregate root)\nSubscriptionStatus  PENDING · SUBSCRIBED · FAILED\nCardSubscriptionNotFoundException"]
+    end
+
+    %% ── Secondary Adapters (Driven) ─────────────────────────────────────────
+    subgraph INFRA["infrastructure  ·  secondary adapters"]
+        PA["CardSubscriptionPersistenceAdapter\nMapStruct + JPA  →  PostgreSQL / H2"]
+        ECA["ExternalCardApiAdapter\nRestTemplate  →  external card API"]
+    end
+
+    %% Driving side calls inbound ports
+    CTRL -->|"SubscribeCardCommand / id / cardId"| IUC
+    KL -->|"SubscribeCardCommand"| IUC
+
+    %% Service operates on the domain model
+    SVC -->|"builds & reads"| DM
+
+    %% Infrastructure depends on (implements) outbound ports — arrows point inward
+    PA  -. "implements Save + Load ports" .-> OUC
+    ECA -. "implements CardApiPort" .->      OUC
+```
+
 ### Module breakdown
 
 | Module           | Depends on                              | Responsibility                                              |

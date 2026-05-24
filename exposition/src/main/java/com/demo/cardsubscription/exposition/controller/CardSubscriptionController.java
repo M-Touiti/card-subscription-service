@@ -8,23 +8,26 @@ import com.demo.cardsubscription.exposition.converter.CardSubscriptionResponseCo
 import com.demo.cardsubscription.exposition.converter.SubscribeCardRequestConverter;
 import com.demo.cardsubscription.exposition.dto.request.SubscribeCardRequest;
 import com.demo.cardsubscription.exposition.dto.response.CardSubscriptionResponse;
+import com.demo.cardsubscription.exposition.exception.ApiError;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-/**
- * REST controller for card subscription operations.
- *
- * <p>The controller is intentionally thin: it delegates all business logic to
- * use-case ports and all conversion to dedicated converter classes.
- */
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/card-subscriptions")
 @RequiredArgsConstructor
+@Tag(name = "Card Subscriptions", description = "Card subscription lifecycle management")
 public class CardSubscriptionController {
 
     private final SubscribeCardUseCase subscribeCardUseCase;
@@ -32,10 +35,18 @@ public class CardSubscriptionController {
     private final SubscribeCardRequestConverter requestConverter;
     private final CardSubscriptionResponseConverter responseConverter;
 
-    /**
-     * Subscribe a new card.
-     * POST /api/v1/card-subscriptions
-     */
+    @Operation(summary = "Subscribe a new card")
+    @ApiResponses({
+        @ApiResponse(responseCode = "201", description = "Subscription created",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                schema = @Schema(implementation = CardSubscriptionResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Validation error",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(responseCode = "500", description = "Internal server error",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                schema = @Schema(implementation = ApiError.class)))
+    })
     @PostMapping
     public ResponseEntity<CardSubscriptionResponse> subscribe(
             @RequestBody @Valid SubscribeCardRequest request) {
@@ -49,10 +60,15 @@ public class CardSubscriptionController {
                 .body(responseConverter.toResponse(subscription));
     }
 
-    /**
-     * Get a subscription by its internal ID.
-     * GET /api/v1/card-subscriptions/{id}
-     */
+    @Operation(summary = "Get a subscription by internal ID")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Subscription found",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                schema = @Schema(implementation = CardSubscriptionResponse.class))),
+        @ApiResponse(responseCode = "404", description = "Subscription not found",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                schema = @Schema(implementation = ApiError.class)))
+    })
     @GetMapping("/{id}")
     public ResponseEntity<CardSubscriptionResponse> getById(@PathVariable String id) {
         log.info("GET /card-subscriptions/{}", id);
@@ -60,10 +76,15 @@ public class CardSubscriptionController {
         return ResponseEntity.ok(responseConverter.toResponse(subscription));
     }
 
-    /**
-     * Get a subscription by card ID.
-     * GET /api/v1/card-subscriptions/card/{cardId}
-     */
+    @Operation(summary = "Get a subscription by card ID")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Subscription found",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                schema = @Schema(implementation = CardSubscriptionResponse.class))),
+        @ApiResponse(responseCode = "404", description = "Subscription not found",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                schema = @Schema(implementation = ApiError.class)))
+    })
     @GetMapping("/card/{cardId}")
     public ResponseEntity<CardSubscriptionResponse> getByCardId(@PathVariable String cardId) {
         log.info("GET /card-subscriptions/card/{}", cardId);

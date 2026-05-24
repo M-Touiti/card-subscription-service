@@ -1,18 +1,17 @@
 package com.demo.cardsubscription.exposition.dto.response;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import java.time.LocalDateTime;
 
-/**
- * REST response body representing a card subscription.
- * Uses a Java record – serialised to JSON by Jackson automatically.
- */
+@Schema(description = "Card subscription state")
 public record CardSubscriptionResponse(
-        String id,
-        String cardId,
-        String userId,
-        String status,
-        LocalDateTime requestedAt,
-        LocalDateTime processedAt,
-        String errorMessage
+        @Schema(description = "Internal subscription ID") String id,
+        @Schema(description = "Card identifier") String cardId,
+        @Schema(description = "User identifier") String userId,
+        @Schema(description = "Subscription status", allowableValues = {"PENDING", "SUBSCRIBED", "FAILED"}) String status,
+        @Schema(description = "When the subscription was requested") LocalDateTime requestedAt,
+        @Schema(description = "When the subscription was processed") LocalDateTime processedAt,
+        @Schema(description = "Error message if status is FAILED") String errorMessage
 ) {
 }
