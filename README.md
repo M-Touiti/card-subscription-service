@@ -1,5 +1,12 @@
 # Card Subscription Service
 
+![Java](https://img.shields.io/badge/Java-21-orange?logo=openjdk)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.5-brightgreen?logo=springboot)
+![Apache Kafka](https://img.shields.io/badge/Apache%20Kafka-3.x-black?logo=apachekafka)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue?logo=postgresql)
+![License](https://img.shields.io/badge/license-MIT-blue)
+![CI](https://github.com/M-Touiti/spring-kafka-microservice-demo/actions/workflows/ci.yml/badge.svg)
+
 A production-grade Spring Boot microservice built with **DDD** and **Clean Architecture** principles.  
 Consumes card events from Kafka, calls an external subscription API, and exposes a REST API to query results.
 
@@ -106,6 +113,68 @@ All messaging concerns (consumer config, DLT strategy, retry, Kafka DTOs) live e
 
 **DLT with exponential back-off.**  
 After 3 retry attempts (1 s → 2 s → 4 s), the message is published to `<topic>.DLT` via `DeadLetterPublishingRecoverer`. Each retry is logged with topic, partition, and offset.
+
+---
+
+## Subscription Flow
+
+### Happy path (Kafka + REST)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant KP as Kafka Producer<br/>(card.events)
+    participant CON as CardEventKafkaConsumer
+    participant SVC as CardSubscriptionService
+    participant DB as PostgreSQL
+    participant EXT as External Card API
+
+    KP->>CON: CardEventMessage {cardId, userId, ...}
+    CON->>SVC: SubscribeCardCommand(cardId, userId)
+
+    SVC->>DB: loadByCardId(cardId)
+    alt already SUBSCRIBED (idempotent)
+        DB-->>SVC: CardSubscription(SUBSCRIBED)
+        SVC-->>CON: return existing (no-op)
+    else first call
+        DB-->>SVC: empty
+        SVC->>DB: save(PENDING)
+        SVC->>EXT: POST /api/v1/subscribe-new-card
+        alt success
+            EXT-->>SVC: 200 OK
+            SVC->>DB: update → SUBSCRIBED
+        else failure
+            EXT-->>SVC: error
+            SVC->>DB: update → FAILED + errorMessage
+        end
+    end
+```
+
+> The REST path (`POST /api/v1/card-subscriptions`) follows the same service flow starting from step 2 — the controller converts the HTTP request into a `SubscribeCardCommand` and delegates to the same use case.
+
+### Dead Letter Topic (DLT) — retry exhausted
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant K as Kafka<br/>(card.events)
+    participant CON as CardEventKafkaConsumer
+    participant EH as DefaultErrorHandler<br/>(exp back-off ×3)
+    participant DLT as Kafka DLT<br/>(card.events.DLT)
+
+    K->>CON: unprocessable event
+    CON-->>EH: exception
+    Note over EH: wait 1 s → retry 1
+    EH->>CON: retry
+    CON-->>EH: exception
+    Note over EH: wait 2 s → retry 2
+    EH->>CON: retry
+    CON-->>EH: exception
+    Note over EH: wait 4 s → retry 3
+    EH->>CON: retry
+    CON-->>EH: exception
+    EH->>DLT: DeadLetterPublishingRecoverer → card.events.DLT
+```
 
 ---
 
