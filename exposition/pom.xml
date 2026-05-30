@@ -138,6 +138,21 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+            <!--
+                Docker Desktop 29.x rejects Docker API version ≤ 1.32 with HTTP 400 on TCP.
+                Testcontainers defaults to v1.32 when DOCKER_API_VERSION is unset.
+                Setting api.version=1.41 prevents the v1.32 fallback so TCP 2375 works.
+                Pair with ~/.testcontainers.properties: docker.host=tcp://127.0.0.1:2375
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <api.version>1.41</api.version>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 </project>

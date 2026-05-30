@@ -1,40 +1,52 @@
 package com.demo.cardsubscription.integration;
 
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 /**
  * Base class for integration tests.
  *
  * Starts two real services via Testcontainers:
- *   - PostgreSQL  (@ServiceConnection auto-wires spring.datasource.*)
- *   - Kafka       (@ServiceConnection auto-wires spring.kafka.bootstrap-servers)
+ *   - PostgreSQL  (auto-wires spring.datasource.*)
+ *   - Kafka       (auto-wires spring.kafka.bootstrap-servers)
  *
- * The external card API (CardApiPort) is mocked with @MockBean in each subclass —
- * integration tests verify the service/persistence/Kafka flow across the port boundary,
- * not the HTTP adapter wiring (which has its own unit tests).
+ * Containers are started once per JVM run via static initialiser (singleton pattern)
+ * so the same ports are used by all subclasses. This allows Spring to cache a single
+ * application context across test classes.
  *
- * Containers are static so they start once and are shared across all subclasses.
+ * The external card API (CardApiPort) is mocked with @MockBean in each subclass.
  */
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = "spring.h2.console.enabled=false"
 )
-@Testcontainers
 abstract class AbstractIntegrationTest {
 
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:16-alpine");
+    static final PostgreSQLContainer<?> POSTGRES;
+    static final KafkaContainer KAFKA;
 
-    @Container
-    @ServiceConnection
-    static final KafkaContainer KAFKA =
-            new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.6.0"));
+    static {
+        POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+        POSTGRES.start();
+
+        KAFKA = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.6.0"));
+        KAFKA.start();
+    }
+
+    @DynamicPropertySource
+    static void overrideConnectionProperties(DynamicPropertyRegistry registry) {
+        // Datasource — override H2 defaults from application.yml with the real Postgres container
+        registry.add("spring.datasource.url",               POSTGRES::getJdbcUrl);
+        registry.add("spring.datasource.username",           POSTGRES::getUsername);
+        registry.add("spring.datasource.password",           POSTGRES::getPassword);
+        registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
+        // Spring Boot 3.2.x: @ServiceConnection wires the producer but not the consumer.
+        // Explicit override ensures the Kafka listener container factory also picks up
+        // the Testcontainers broker address.
+        registry.add("spring.kafka.bootstrap-servers", KAFKA::getBootstrapServers);
+    }
 }

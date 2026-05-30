@@ -433,14 +433,18 @@ mvn test -pl exposition -Dtest="**/integration/**"
 mvn test
 ```
 
-Integration tests use [Testcontainers](https://testcontainers.com/) — no manual `docker compose up` needed. On **Windows with Docker Desktop** the Java Docker client may fail to find the daemon. Fix:
+Integration tests use [Testcontainers](https://testcontainers.com/) — no manual `docker compose up` needed.
+
+**Windows with Docker Desktop 4.28+:** named pipes return HTTP 400; use the TCP endpoint instead.
+
+1. Enable **"Expose daemon on tcp://localhost:2375 without TLS"** in Docker Desktop → Settings → General.
+2. Create `~/.testcontainers.properties` **without a UTF-8 BOM** (PowerShell 5):
 
 ```powershell
-# PowerShell — set before running mvn
-$env:DOCKER_HOST = "npipe:////./pipe/docker_cli"
+$enc = New-Object System.Text.UTF8Encoding $false
+[System.IO.File]::WriteAllText("$env:USERPROFILE\.testcontainers.properties",
+    "docker.host=tcp://127.0.0.1:2375`n", $enc)
 ```
-
-Or create `~/.testcontainers.properties` with `docker.host=npipe:////./pipe/docker_cli` to make it permanent.
 
 ---
 
