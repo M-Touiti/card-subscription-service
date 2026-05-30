@@ -70,7 +70,7 @@ graph LR
     %% ── Secondary Adapters (Driven) ─────────────────────────────────────────
     subgraph INFRA["infrastructure  ·  secondary adapters"]
         PA["CardSubscriptionPersistenceAdapter\nMapStruct + JPA  →  PostgreSQL / H2"]
-        ECA["ExternalCardApiAdapter\nRestTemplate  →  external card API"]
+        ECA["ExternalCardApiAdapter\nRestTemplate + @CircuitBreaker  →  external card API"]
     end
 
     %% Driving side calls inbound ports
@@ -91,9 +91,9 @@ graph LR
 |------------------|-----------------------------------------|-------------------------------------------------------------|
 | `domain`         | —                                       | `CardSubscription` aggregate, `SubscriptionStatus`, domain exceptions. Pure Java, no frameworks. |
 | `application`    | `domain`                                | Use-case interfaces (`SubscribeCardUseCase`, `GetCardSubscriptionUseCase`), outbound port interfaces, `CardSubscriptionService`. |
-| `infrastructure` | `application`                           | JPA entity, Spring Data repository, persistence adapter, external HTTP API adapter (RestTemplate). |
+| `infrastructure` | `application`                           | JPA entity, Spring Data repository, persistence adapter, external HTTP API adapter (RestTemplate + Resilience4j circuit breaker). |
 | `kafka-consumer` | `application`                           | `CardEventKafkaConsumer`, `KafkaConsumerConfig` (DLT + exponential back-off), `CardEventMessage` DTO. |
-| `exposition`     | `application` · `infrastructure` · `kafka-consumer` | `CardSubscriptionController`, request/response DTOs, converters, `GlobalExceptionHandler`, Spring Boot main class. |
+| `exposition`     | `application` · `infrastructure` · `kafka-consumer` | `CardSubscriptionController`, request/response DTOs, converters, `GlobalExceptionHandler`, Spring Boot main class, Actuator/Prometheus endpoints. |
 
 ---
 
@@ -113,6 +113,9 @@ All messaging concerns (consumer config, DLT strategy, retry, Kafka DTOs) live e
 
 **DLT with exponential back-off.**  
 After 3 retry attempts (1 s → 2 s → 4 s), the message is published to `<topic>.DLT` via `DeadLetterPublishingRecoverer`. Each retry is logged with topic, partition, and offset.
+
+**Circuit breaker on the external API.**  
+`ExternalCardApiAdapter.subscribeCard()` is annotated with `@CircuitBreaker(name = "externalCardApi")`. When the circuit opens (≥ 50% failure rate over 10 calls), the fallback returns `false` and the subscription is immediately marked `FAILED` — no call is made to the external API. The circuit transitions to half-open after 10 s and re-closes once 3 consecutive calls succeed. State is visible at `/actuator/health`.
 
 ---
 
@@ -405,6 +408,9 @@ Key properties in `exposition/src/main/resources/application.yml`:
 | `kafka.topics.card-events`          | `card.events`                  | Source topic                         |
 | `external.card-api.base-url`        | `http://localhost:8081`        | External subscription API base URL   |
 | `external.card-api.subscribe-path`  | `/api/v1/subscribe-new-card`   | Subscription API endpoint path       |
+| `management.endpoints.web.exposure.include` | `health,info,prometheus,metrics` | Exposed Actuator endpoints |
+| `resilience4j.circuitbreaker.instances.externalCardApi.failure-rate-threshold` | `50` | % failures to open circuit |
+| `resilience4j.circuitbreaker.instances.externalCardApi.wait-duration-in-open-state` | `10s` | Time before half-open retry |
 
 Override any property via environment variable using Spring's relaxed binding, e.g.:
 
@@ -417,23 +423,50 @@ SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 java -jar app.jar
 ## Running Tests
 
 ```bash
+# Unit tests only — no Docker required
+mvn test -pl exposition -Dtest="**/unit/**"
+
+# Integration tests — requires Docker (Testcontainers starts Postgres + Kafka automatically)
+mvn test -pl exposition -Dtest="**/integration/**"
+
 # All tests
 mvn test
-
-# Unit tests only (no Kafka / DB required)
-mvn test -pl exposition -Dtest="**/unit/**"
 ```
+
+Integration tests use [Testcontainers](https://testcontainers.com/) — no manual `docker compose up` needed. On **Windows with Docker Desktop** the Java Docker client may fail to find the daemon. Fix:
+
+```powershell
+# PowerShell — set before running mvn
+$env:DOCKER_HOST = "npipe:////./pipe/docker_cli"
+```
+
+Or create `~/.testcontainers.properties` with `docker.host=npipe:////./pipe/docker_cli` to make it permanent.
+
+---
+
+## Observability
+
+| Endpoint | Description |
+|---|---|
+| `GET /actuator/health` | Application + circuit-breaker health |
+| `GET /actuator/prometheus` | Prometheus-format metrics (Micrometer) |
+| `GET /actuator/metrics` | JVM, HTTP, Kafka, and custom metrics |
+
+The circuit breaker state (`externalCardApi`) is exposed in both `/actuator/health` and `/actuator/prometheus` so it can be scraped by Prometheus and displayed in Grafana.
 
 ---
 
 ## Tech Stack
 
-| Layer       | Technology                                  |
-|-------------|---------------------------------------------|
-| Language    | Java 21                                     |
-| Framework   | Spring Boot 3.2.5                           |
-| Messaging   | Spring Kafka 3.x, `DefaultErrorHandler`, DLT |
-| Persistence | Spring Data JPA, H2 (dev), PostgreSQL (prod) |
-| Mapping     | MapStruct 1.5.5 (infrastructure only)       |
-| Build       | Maven 3.9, multi-module                     |
-| Container   | Docker (multi-stage build, non-root user)   |
+| Layer        | Technology                                           |
+|--------------|------------------------------------------------------|
+| Language     | Java 21                                              |
+| Framework    | Spring Boot 3.2.5                                    |
+| Messaging    | Spring Kafka 3.x, `DefaultErrorHandler`, DLT         |
+| Persistence  | Spring Data JPA, H2 (dev), PostgreSQL (prod)         |
+| Mapping      | MapStruct 1.5.5 (infrastructure only)                |
+| Resilience   | Resilience4j 2.1 — circuit breaker on external API   |
+| Observability| Spring Actuator, Micrometer, Prometheus              |
+| Testing      | Testcontainers (Postgres + Kafka), Mockito `@MockBean`, Awaitility |
+| Build        | Maven 3.9, multi-module                              |
+| Container    | Docker (multi-stage build, non-root user)            |

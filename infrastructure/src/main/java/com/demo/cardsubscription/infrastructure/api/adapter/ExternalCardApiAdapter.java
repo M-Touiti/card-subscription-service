@@ -3,6 +3,7 @@ package com.demo.cardsubscription.infrastructure.api.adapter;
 import com.demo.cardsubscription.application.port.out.CardApiPort;
 import com.demo.cardsubscription.infrastructure.api.dto.SubscribeCardApiRequest;
 import com.demo.cardsubscription.infrastructure.api.dto.SubscribeCardApiResponse;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,6 +30,7 @@ public class ExternalCardApiAdapter implements CardApiPort {
     private String subscribePath;
 
     @Override
+    @CircuitBreaker(name = "externalCardApi", fallbackMethod = "subscribeCardFallback")
     public boolean subscribeCard(String cardId, String userId) {
         String url = baseUrl + subscribePath;
         SubscribeCardApiRequest request = new SubscribeCardApiRequest(cardId, userId);
@@ -52,5 +54,11 @@ public class ExternalCardApiAdapter implements CardApiPort {
                     cardId, ex.getStatusCode(), ex.getResponseBodyAsString(), ex);
             throw ex;
         }
+    }
+
+    // Called by Resilience4j when the circuit is OPEN or a fallback is needed
+    boolean subscribeCardFallback(String cardId, String userId, Throwable t) {
+        log.warn("Circuit breaker OPEN — skipping external API call for cardId={}: {}", cardId, t.getMessage());
+        return false;
     }
 }
