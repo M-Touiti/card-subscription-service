@@ -1,0 +1,3 @@
+replica1 17870
+replica2 17976
+replica3 17840

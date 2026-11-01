@@ -1,0 +1,6 @@
+valid message before tests: SUBSCRIBED; DLT records: 0
+blank cardId, then valid message, after 20 s: valid=SUBSCRIBED; DLT records: 1
+external API returning 500, after 15 s: row=FAILED; DLT records: 1
+API recovered, 30 s later: row=SUBSCRIBED
+malformed JSON, then valid message, after 30 s: valid=SUBSCRIBED; DLT records: 2
+log output over 5 s afterwards (lines bytes):       0       0

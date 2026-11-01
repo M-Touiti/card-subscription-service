@@ -1,0 +1,1 @@
+{"replicas" : 3, "partitions" : 1, "run" : 1, "events" : 1500, "rows" : 1500, "distinct_cards" : 1500, "subscribed" : 1500, "failed" : 0, "drain_seconds" : 102.945959}

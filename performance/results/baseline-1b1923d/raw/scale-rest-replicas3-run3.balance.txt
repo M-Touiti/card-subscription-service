@@ -1,0 +1,3 @@
+replica1 30841
+replica2 30929
+replica3 30807
