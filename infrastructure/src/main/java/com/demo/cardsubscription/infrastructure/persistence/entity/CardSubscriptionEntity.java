@@ -6,7 +6,8 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "card_subscription")
+@Table(name = "card_subscription",
+        uniqueConstraints = @UniqueConstraint(name = "uk_card_subscription_card_id", columnNames = "card_id"))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -35,4 +36,10 @@ public class CardSubscriptionEntity {
 
     @Column(name = "error_message", length = 512)
     private String errorMessage;
+
+    @Column(nullable = false)
+    private int attempts;
+
+    @Column(name = "next_retry_at")
+    private LocalDateTime nextRetryAt;
 }

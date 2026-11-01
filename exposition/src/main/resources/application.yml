@@ -19,12 +19,15 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: validate  # Flyway owns the schema (db/migration in infrastructure)
     show-sql: false
     open-in-view: false
     properties:
       hibernate:
         format_sql: true
+
+  flyway:
+    baseline-on-migrate: true  # databases created by Hibernate before Flyway start from V1
 
   # ── Kafka ─────────────────────────────────────────────────────────────────────
   kafka:
@@ -36,17 +39,34 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    listener:
+      concurrency: 4
 
 # ── Application-specific Kafka topics ─────────────────────────────────────────
 kafka:
   topics:
     card-events: card.events
+    card-events-partitions: 12
+    replicas: 1
 
 # ── External card API ──────────────────────────────────────────────────────────
 external:
   card-api:
     base-url: http://localhost:8081
     subscribe-path: /api/v1/subscribe-new-card
+    connect-timeout: 2s
+    read-timeout: 3s
+
+# ── Retry of failed subscriptions ─────────────────────────────────────────────
+card-subscription:
+  retry:
+    enabled: true
+    interval: PT5S
+    batch-size: 50
+    max-attempts: 8     # delays double from initial-delay: about an hour in total
+    initial-delay: 30s
+    max-delay: 30m
+    pending-lease: 60s  # must exceed the longest external call
 
 # ── Actuator & Prometheus ─────────────────────────────────────────────────────
 management:
@@ -57,6 +77,9 @@ management:
   endpoint:
     health:
       show-details: always
+  health:
+    circuitbreakers:
+      enabled: true
   metrics:
     tags:
       application: ${spring.application.name}
@@ -67,12 +90,16 @@ resilience4j:
     instances:
       externalCardApi:
         register-health-indicator: true
+        # Report the state without failing health: a partner outage should not get replicas restarted
+        allow-health-indicator-to-fail: false
         sliding-window-size: 10
         minimum-number-of-calls: 5
         permitted-number-of-calls-in-half-open-state: 3
         automatic-transition-from-open-to-half-open-enabled: true
         wait-duration-in-open-state: 10s
         failure-rate-threshold: 50
+        slow-call-duration-threshold: 2s
+        slow-call-rate-threshold: 50
         event-consumer-buffer-size: 10
 
 # ── Logging ───────────────────────────────────────────────────────────────────

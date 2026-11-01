@@ -19,6 +19,8 @@ public class CardSubscription {
     private LocalDateTime requestedAt;
     private LocalDateTime processedAt;
     private String errorMessage;
+    private int attempts;
+    private LocalDateTime nextRetryAt;
 
     // ─── Private constructor – use builder() ─────────────────────────────────
 
@@ -36,13 +38,19 @@ public class CardSubscription {
         this.status = SubscriptionStatus.SUBSCRIBED;
         this.processedAt = LocalDateTime.now();
         this.errorMessage = null;
+        this.nextRetryAt = null;
     }
 
-    /** Mark the subscription as failed with a human-readable reason. */
-    public void markFailed(String reason) {
+    /**
+     * Mark the subscription as failed with a human-readable reason.
+     *
+     * @param nextRetryAt when the retry job may try again; {@code null} if retries are exhausted
+     */
+    public void markFailed(String reason, LocalDateTime nextRetryAt) {
         this.status = SubscriptionStatus.FAILED;
         this.processedAt = LocalDateTime.now();
         this.errorMessage = reason;
+        this.nextRetryAt = nextRetryAt;
     }
 
     // ─── Getters ──────────────────────────────────────────────────────────────
@@ -54,6 +62,8 @@ public class CardSubscription {
     public LocalDateTime getRequestedAt()   { return requestedAt; }
     public LocalDateTime getProcessedAt()   { return processedAt; }
     public String getErrorMessage()         { return errorMessage; }
+    public int getAttempts()                { return attempts; }
+    public LocalDateTime getNextRetryAt()   { return nextRetryAt; }
 
     // ─── Setters ──────────────────────────────────────────────────────────────
 
@@ -64,6 +74,8 @@ public class CardSubscription {
     public void setRequestedAt(LocalDateTime requestedAt)   { this.requestedAt = requestedAt; }
     public void setProcessedAt(LocalDateTime processedAt)   { this.processedAt = processedAt; }
     public void setErrorMessage(String errorMessage)        { this.errorMessage = errorMessage; }
+    public void setAttempts(int attempts)                   { this.attempts = attempts; }
+    public void setNextRetryAt(LocalDateTime nextRetryAt)   { this.nextRetryAt = nextRetryAt; }
 
     // ─── equals / hashCode (identity by id) ──────────────────────────────────
 
@@ -100,6 +112,8 @@ public class CardSubscription {
         private LocalDateTime requestedAt;
         private LocalDateTime processedAt;
         private String errorMessage;
+        private int attempts;
+        private LocalDateTime nextRetryAt;
 
         private Builder() {}
 
@@ -110,6 +124,8 @@ public class CardSubscription {
         public Builder requestedAt(LocalDateTime v)         { this.requestedAt = v;             return this; }
         public Builder processedAt(LocalDateTime v)         { this.processedAt = v;             return this; }
         public Builder errorMessage(String errorMessage)    { this.errorMessage = errorMessage; return this; }
+        public Builder attempts(int attempts)               { this.attempts = attempts;         return this; }
+        public Builder nextRetryAt(LocalDateTime v)         { this.nextRetryAt = v;             return this; }
 
         public CardSubscription build() {
             CardSubscription s = new CardSubscription();
@@ -120,6 +136,8 @@ public class CardSubscription {
             s.requestedAt  = this.requestedAt;
             s.processedAt  = this.processedAt;
             s.errorMessage = this.errorMessage;
+            s.attempts     = this.attempts;
+            s.nextRetryAt  = this.nextRetryAt;
             return s;
         }
     }

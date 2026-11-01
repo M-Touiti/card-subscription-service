@@ -22,7 +22,8 @@ import org.testcontainers.utility.DockerImageName;
  */
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "spring.h2.console.enabled=false"
+        // The retry job would race the assertions; tests call the use case directly instead
+        properties = {"spring.h2.console.enabled=false", "card-subscription.retry.enabled=false"}
 )
 abstract class AbstractIntegrationTest {
 
