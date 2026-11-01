@@ -19,12 +19,15 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: validate  # Flyway owns the schema (db/migration in infrastructure)
     show-sql: false
     open-in-view: false
     properties:
       hibernate:
         format_sql: true
+
+  flyway:
+    baseline-on-migrate: true  # databases created by Hibernate before Flyway start from V1
 
   # ── Kafka ─────────────────────────────────────────────────────────────────────
   kafka:

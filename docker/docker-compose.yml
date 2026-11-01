@@ -72,7 +72,7 @@ services:
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       SPRING_DATASOURCE_USERNAME: carduser
       SPRING_DATASOURCE_PASSWORD: cardpass
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
       SPRING_H2_CONSOLE_ENABLED: "false"
       EXTERNAL_CARD_API_BASE_URL: http://host.docker.internal:8081
 
