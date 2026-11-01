@@ -57,6 +57,17 @@ external:
     connect-timeout: 2s
     read-timeout: 3s
 
+# ── Retry of failed subscriptions ─────────────────────────────────────────────
+card-subscription:
+  retry:
+    enabled: true
+    interval: PT5S
+    batch-size: 50
+    max-attempts: 8     # delays double from initial-delay: about an hour in total
+    initial-delay: 30s
+    max-delay: 30m
+    pending-lease: 60s  # must exceed the longest external call
+
 # ── Actuator & Prometheus ─────────────────────────────────────────────────────
 management:
   endpoints:
