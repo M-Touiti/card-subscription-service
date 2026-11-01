@@ -39,11 +39,15 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    listener:
+      concurrency: 4
 
 # ── Application-specific Kafka topics ─────────────────────────────────────────
 kafka:
   topics:
     card-events: card.events
+    card-events-partitions: 12
+    replicas: 1
 
 # ── External card API ──────────────────────────────────────────────────────────
 external:
