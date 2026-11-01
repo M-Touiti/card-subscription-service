@@ -56,9 +56,9 @@ public class ExternalCardApiAdapter implements CardApiPort {
         }
     }
 
-    // Called by Resilience4j when the circuit is OPEN or a fallback is needed
+    // Called by Resilience4j when the circuit is OPEN or the call failed
     boolean subscribeCardFallback(String cardId, String userId, Throwable t) {
-        log.warn("Circuit breaker OPEN — skipping external API call for cardId={}: {}", cardId, t.getMessage());
+        log.warn("External API call not completed for cardId={}: {}", cardId, t.getMessage());
         return false;
     }
 }
