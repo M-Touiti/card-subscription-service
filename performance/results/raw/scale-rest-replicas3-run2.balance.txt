@@ -1,0 +1,3 @@
+replica1 48213
+replica2 47576
+replica3 52901

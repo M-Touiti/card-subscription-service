@@ -1,0 +1,2 @@
+replica1 53434
+replica2 60128

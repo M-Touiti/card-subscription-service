@@ -1,0 +1,8 @@
+date: 2026-10-31T23:32:23Z
+git_commit: 1b1923d plus uncommitted changes
+docker_server: 29.4.3
+docker_vm_cpus: 16
+docker_vm_mem_bytes: 16613703680
+docker_os: Docker Desktop
+repeats: 3
+kafka_events: 6000

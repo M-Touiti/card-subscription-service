@@ -1,0 +1,3 @@
+replica1 24346
+replica2 24449
+replica3 24322

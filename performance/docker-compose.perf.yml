@@ -1,0 +1,106 @@
+# Isolated load-test stack. Shares nothing with docker/docker-compose.yml: separate
+# project name, network and volumes. CPU and memory limits make runs comparable.
+name: card-sub-perf
+
+services:
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    depends_on:
+      - zookeeper
+    cpus: 2.0
+    mem_limit: 2g
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+  postgres:
+    image: postgres:16
+    cpus: 2.0
+    mem_limit: 1g
+    environment:
+      POSTGRES_DB: cardsubdb
+      POSTGRES_USER: carduser
+      POSTGRES_PASSWORD: cardpass
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U carduser -d cardsubdb"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # Stands in for the external card API. Latency and faults are set at runtime
+  # through the WireMock admin API, published on localhost for the suite script.
+  stub:
+    image: wiremock/wiremock:3.9.1
+    cpus: 2.0
+    mem_limit: 1g
+    command:
+      - --no-request-journal
+      - --disable-request-logging
+      - --async-response-enabled=true
+      - --async-response-threads=64
+      - --container-threads=400
+    ports:
+      - "127.0.0.1:18081:8080"
+    volumes:
+      - ./stubs:/home/wiremock:ro
+
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: card-sub-perf-app:latest
+    cpus: 2.0
+    mem_limit: 1g
+    # Bounded as a safeguard: an unbounded log once reached 27 GB here (README.md, finding F2).
+    logging:
+      driver: json-file
+      options:
+        max-size: 500m
+        max-file: "2"
+    depends_on:
+      kafka:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      stub:
+        condition: service_started
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/cardsubdb
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      SPRING_DATASOURCE_USERNAME: carduser
+      SPRING_DATASOURCE_PASSWORD: cardpass
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+      SPRING_H2_CONSOLE_ENABLED: "false"
+      EXTERNAL_CARD_API_BASE_URL: http://stub:8080
+      # 10 is HikariCP's default, i.e. what the service ships with.
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${HIKARI_POOL:-10}
+      KAFKA_TOPICS_CARD_EVENTS_PARTITIONS: ${CARD_EVENTS_PARTITIONS:-12}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8080/actuator/health/ping || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 5s
+
+  # Run on demand: docker compose run --rm k6 run /scripts/<script>.js
+  k6:
+    image: grafana/k6:0.54.0
+    profiles: ["tools"]
+    cpus: 4.0
+    mem_limit: 2g
+    volumes:
+      - ./k6:/scripts:ro
+      - ./results:/results

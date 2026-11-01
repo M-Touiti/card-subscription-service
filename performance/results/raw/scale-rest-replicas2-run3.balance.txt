@@ -1,0 +1,2 @@
+replica1 72412
+replica2 78277

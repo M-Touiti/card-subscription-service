@@ -1,0 +1,3 @@
+replica1 67501
+replica2 66205
+replica3 72511

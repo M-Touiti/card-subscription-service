@@ -1,0 +1,2 @@
+replica1 19658
+replica2 20105
